@@ -1,5 +1,8 @@
 mod args;
 
+use clap::{ArgMatches};
+use std::os::unix::process;
+
 use colored::*;
 
 fn main() {
@@ -15,6 +18,13 @@ fn main() {
     println!("- handle partial URLs (url crate?)");
     println!("- implement `aqui get`");
 
+    match args.subcommand_name() {
+        None => println!("No subcommand selected!"),
+        Some(sub) => println!("selected sub-command: {}", sub),
+    }
+}
+
+fn handle_subcommand(args: ArgMatches) {
 }
 
 fn print_colors() {

@@ -1,6 +1,10 @@
 use colored::*;
 
-//let _0: uint8 = 0;
+enum hexValues {
+    _0(),
+}
+
+//let _0: u8 = 0;
 
 fn red(text: String) -> ColoredString { text.truecolor(172, 32, 16) }
 fn orange(text: String) -> ColoredString { text.truecolor(192, 120, 16) }
