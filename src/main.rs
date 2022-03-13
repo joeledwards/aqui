@@ -1,12 +1,18 @@
 mod args;
+mod request;
 
 use clap::{ArgMatches};
 use std::os::unix::process;
 
 use colored::*;
+use tokio;
 
-fn main() {
-    let args = args::parseArgs();
+use args as arguments;
+use request;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let args = arguments::parseArgs();
 
     print_colors();
 
@@ -19,12 +25,25 @@ fn main() {
     println!("- implement `aqui get`");
 
     match args.subcommand_name() {
-        None => println!("No subcommand selected!"),
-        Some(sub) => println!("selected sub-command: {}", sub),
+        None => {
+            println!("No subcommand selected!");
+
+            Ok(())
+        },
+        Some(subcommand) => {
+            println!("selected sub-command: {}", sub);
+
+            // TODO: have the handler return the result
+            handle_subcommand(subcommand, args);
+
+            Ok(())
+        },
     }
 }
 
-fn handle_subcommand(args: ArgMatches) {
+fn handle_subcommand(subcommand: &str, args: ArgMatches) {
+    let url = args.get("url");
+    let result = request::send(subcommand, url);
 }
 
 fn print_colors() {
