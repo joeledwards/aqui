@@ -1,6 +1,6 @@
 [package]
 name = "aqui"
-version = "8.0.0"
+version = "8.1.0"
 authors = ["Joel Edwards <joeledwards@gmail.com>"]
 edition = "2024"
 rust-version = "1.87"

@@ -1,9 +1,9 @@
-# 8.0.0 publication handoff
+# 8.1.0 publication handoff
 
-Version 8.0.0 is prepared locally and has not been published by the agent. It
-continues the Node version lineage, with the package version also supplying the
-CLI version and User-Agent. This release includes the HTTP-method core, bounded
-request-payload previews, offline status-code lookup and HTTPS IP/geolocation.
+Version 8.1.0 is prepared locally for developer publication. Version 8.0.0 is
+already published; this minor release adds bounded request-payload previews,
+offline status-code lookup and HTTPS IP/geolocation to that HTTP-method core.
+The package version supplies the CLI version and default `aqui/8.1.0` User-Agent.
 
 ## Latest validation (2026-10-29)
 
@@ -75,5 +75,5 @@ cargo publish --dry-run --locked
 cargo publish --locked
 ```
 
-If version 8.0.0 already exists in the registry, choose a new version before
-publishing; local package verification does not establish registry availability.
+The target version is 8.1.0; local package verification does not establish
+registry availability for that version.

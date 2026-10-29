@@ -1,10 +1,9 @@
 # aquí
 
-Version **8.0.0** is prepared for release under the [MIT license](LICENSE).
-The major version advances the User-Agent from Node's `aqui/7.x` to `aqui/8.0.0`,
-avoiding a misleading version regression to `aqui/0.1.0`. This Rust release provides
-the HTTP-method core, payload previews, status lookup and public IP/geolocation
-lookup. It does not claim complete Node feature parity.
+Version **8.1.0** is prepared for release under the [MIT license](LICENSE).
+Building on the published 8.0.0 Rust HTTP client, this minor release adds payload
+previews, status-code lookup and public IP/geolocation lookup. It does not claim
+complete Node feature parity. The default User-Agent is `aqui/8.1.0`.
 See the [release checklist](docs/releasing.md) and [changelog](CHANGELOG.md).
 
 A human-friendly HTTP CLI, ported from [Node aquí](https://github.com/joeledwards/node-aqui).

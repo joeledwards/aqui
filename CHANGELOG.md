@@ -1,6 +1,19 @@
 # Changelog
 
-## 8.0.0 — prepared, unreleased
+## 8.1.0 — prepared, unreleased
+
+- Offline `status-codes [filter]` with case-insensitive text, unofficial filters,
+  duplicate usages, source attribution and destination-aware color.
+- Bounded positional payload JSON/hex previews and stdin source-read counts;
+  raw output stays undecorated.
+- HTTPS `ip`/geolocation lookup via ipwho.is, normalized/provider JSON and CLI
+  modes, bounded responses and validation; compact machine formats remain plain.
+- All pretty IP modes use auto color by default: colored on terminals, plain
+  when piped; `--color always|never` explicitly overrides this behavior.
+- Status filtering uses literal case-insensitive text rather than Node regex.
+- Advance the CLI version and default User-Agent to 8.1.0.
+
+## 8.0.0
 
 Rust CLI implementation continuing the Node aquí version lineage. Version 8
 keeps the User-Agent moving forward from Node's `aqui/7.x`; `aqui/0.1.0` would
@@ -29,8 +42,6 @@ major implementation transition, not a claim of complete Node feature parity.
 
 ### Scope and differences
 
-- Status filtering currently uses literal text instead of Node regular expressions.
-- IP lookup uses HTTPS ipwho.is, and all pretty modes follow `--color`.
 - Only write methods accept a payload; payload and stdin mode conflict. Custom
   Content-Length and Transfer-Encoding are rejected in favor of managed framing.
 - Default completion status and opt-in `--fail` are independent of output mode.
@@ -42,12 +53,3 @@ major implementation transition, not a claim of complete Node feature parity.
   duplicate keys. Uploaded literal bytes are preserved independently of display.
 
 See docs/parity.md and docs/releasing.md for remaining validation and release gates.
-
-### Node parity additions
-
-- Offline `status-codes [filter]` with case-insensitive text, unofficial filters,
-  duplicate usages, source attribution and destination-aware color.
-- Bounded positional payload JSON/hex previews and stdin source-read counts;
-  raw output stays undecorated.
-- HTTPS `ip`/geolocation lookup via ipwho.is, normalized/provider JSON and CLI
-  modes, bounded responses and validation; compact machine formats remain plain.
