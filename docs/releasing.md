@@ -1,117 +1,79 @@
-# 8.0.0 release checklist
+# 8.0.0 publication handoff
 
-Status: local source/package checks complete; publication gates remain. Not published. Version 8 continues the Node
-lineage and advances its User-Agent past Node's `aqui/7.x`, avoiding a misleading
-regression to `aqui/0.1.0`, while delivering the Rust HTTP-method core. Missing Node features are
-listed in README, CHANGELOG and parity.md; full parity is not a release claim.
+Version 8.0.0 is prepared locally and has not been published by the agent. It
+continues the Node version lineage, with the package version also supplying the
+CLI version and User-Agent. This release includes the HTTP-method core, bounded
+request-payload previews, offline status-code lookup and HTTPS IP/geolocation.
 
-## Source/package gates
+## Latest validation (2026-10-29)
 
-- [x] Package version 8.0.0; CLI version and default User-Agent derive from it.
-- [x] MIT license selected by developer; LICENSE and Cargo metadata included.
-- [x] README, changelog, parity guide, coverage matrix and package allowlist.
-- [x] Source package excludes target, developer captures, credentials and Git files.
-- [x] Final offline locked Rust 1.87 unit tests, formatting and stable Clippy.
-- [x] Documentation generation and local package build/verification.
-- [x] Review package contents; parser-level method help/version tests pass.
-- [x] Process-level CLI help/version smoke checks (authorized loopback suite).
+- 35 isolated unit tests passed on Rust 1.87, including all pretty IP formats in
+  auto/always/never color modes with terminal and piped destinations.
+- Stable Clippy with warnings denied, formatting and diff whitespace passed.
+- Rust 1.87 binary build and documentation generation with warnings denied passed.
+- The previously authorized loopback suite passed all 80 HTTP/TLS/process cases
+  again against the rebuilt binary, without external requests.
+- Offline locked source-package build/verification and archive review passed.
+  Source, license, documentation and the opt-in transport tool are included;
+  developer captures, credentials and target/build artifacts are excluded.
 
-Current validation: 24 unit tests passed on Rust 1.87 after adding auth, per-client
-TLS opt-out and the uniform HTTP-status policy; stable direct clippy-driver with
-warnings denied and formatting passed. The status-policy regression failed with
-the old policy before the fix. Rust 1.87 binary/docs build and offline locked
-source package build/verification passed. Package includes the opt-in transport
-suite (18 files, approximately 140 KiB unpacked / 40 KiB compressed).
-Archive manifest/license/allowlist inspected. Developer subsequently authorized the
-loopback suite: all 80 HTTP/TLS/process cases passed on the Rust 1.87 debug binary.
-No external endpoint/registry queries, publish dry run, Git operations or publication.
+The pretty JSON regression test failed before its fix. The loopback suite covers
+all seven methods, HEAD, literal and 64 KiB binary stdin bodies, response status
+and exit policy, redirects/replay/auth stripping, credential redaction, duplicate
+headers, timeouts, truncation, body limits, broken pipes, CLI help/version, color
+controls and self-signed TLS verification/opt-out. It starts ephemeral loopback
+servers and cleans up temporary OpenSSL fixtures.
 
-## Transport/process validation
+## Deliberate scope and remaining validation
 
-Developer explicitly authorized the local suite on 2026-10-28. All 80 cases passed
-with no external requests. The first run exposed an incorrect redirect-limit
-fixture that terminated successfully; it now redirects to itself. No Rust client
-fix was needed. Added process help/version and piped auto-color checks; expected
-peer resets in negative tests are handled by the fixture server.
+- Status filters use literal case-insensitive text rather than Node regular
+  expressions. The catalog is a bundled historical snapshot with source attribution.
+- Pretty IP modes follow destination-aware `--color auto` by default. Forced
+  color is explicit; compact IP JSON and plain CLI output always remain plain.
+  Environment/theme customization remains future work.
+- IP lookup uses HTTPS ipwho.is, a five-second default timeout, a 64 KiB response
+  limit and schema validation. No live provider requests were made by the agent.
+- Trusted public TLS, proxies, real terminal appearance, blocked/failed stdin,
+  early replies, large-stream RSS and other process output failures remain manual
+  validation. Prepared headers are initial metadata, not a wire capture; stdin
+  byte counts measure source reads, not confirmed server delivery.
 
-- [x] All seven methods, absent/empty/JSON/text literal bodies, exact 64 KiB binary
-  stdin bodies for write methods, and HEAD without body output.
-- [x] 301/302/303 method rewriting, 307/308 buffered body replay, non-replayable
-  stdin handling, redirect limit/zero redirects and cross-origin auth stripping.
-- [x] Self-signed HTTPS rejection, explicit -C acceptance, subsequent secure-default
-  rejection; timeout before headers/during body, abrupt EOF/length mismatch.
-- [x] Normal/raw/default/--fail statuses 200/201/204/302/400/404/500, malformed
-  arguments, body limit, duplicate response headers, redacted request credentials,
-  and quiet broken output pipe.
-- [x] Forced color, disabled color, auto color on piped output, unchanged raw bytes,
-  CLI version, root help and POST help.
-- [ ] Trusted public TLS and proxy environment behavior.
-- [ ] Actual terminal auto-color/visual review.
-- [ ] Blocked-stdin cancellation, live interrupted/failed stdin sources, early
-  replies, larger upload/RSS/resource campaign and other output-writer failures.
-
-Rerun the authorized suite with:
+Optional developer checks after building (these contact the provider):
 
 ```sh
-# Build first using the workspace's documented compiler/CC override if needed.
+aqui ip -c
+aqui ip -gJ
+aqui ip -gJ | cat                  # auto mode: no generated ANSI
+aqui ip -R --color never
+```
+
+For repeatable local verification in this workspace, use the compiler/environment
+prefix in README (Rust 1.87 and `CRATE_CC_NO_DEFAULTS=1`) with:
+
+```sh
+cargo test --offline --locked --lib --bins
 cargo build --offline --locked --bin aqui
+cargo doc --offline --locked --no-deps
+cargo package --offline --locked
 python3 tools/check_transport.py --binary target/debug/aqui
 ```
 
-It starts two ephemeral loopback HTTP servers and one TLS server, generates a
-short-lived self-signed certificate via installed OpenSSL in a temporary directory,
-cleans up its fixtures/services, clears proxy settings for child processes, and
-makes no external requests. Each child has an eight-second deadline. Test uploads
-are at most 64 KiB; the broken-pipe response is 1 MiB. The suite checks all methods,
-exact literal/stdin bytes, raw/normal/default/`--fail` status combinations,
-301/302/303/307/308 replay semantics, redirect budgets, cross-origin auth stripping,
-redacted metadata, duplicate response headers, timeouts, truncated responses,
-body limits, argument errors, quiet broken pipes, and TLS verification/opt-out.
+The transport suite has separate prior authorization; these commands do not
+extend that authorization to external endpoints or broader test campaigns.
 
-Remaining gaps despite the passing run: trusted public TLS, proxy behavior, actual terminal auto-color, blocked stdin
-cancellation, interrupted/failed stdin sources on the live upload path, RSS,
-and other redirected-output failures. No memory bound is claimed from the fixture
-size alone. Syntax compilation of the Python file does not start servers.
+## Developer publication
 
-Developer manual examples, from the repository after building. These contact the
-chosen endpoint; use a controlled test instance, especially for modifying methods:
+Registry ownership and version availability have not been queried. No push, tag,
+registry dry run or publication was performed. Release-binary distribution and
+cross-platform CI remain outside this source release.
 
-```sh
-./target/debug/aqui --version
-./target/debug/aqui --help
-./target/debug/aqui post --help
-./target/debug/aqui get "$AQUI_TEST_URL/get" --color never
-./target/debug/aqui head "$AQUI_TEST_URL/get"
-./target/debug/aqui options "$AQUI_TEST_URL/anything"
-./target/debug/aqui post "$AQUI_TEST_URL/anything" '{"n":123456789012345678901234567890}'
-./target/debug/aqui put "$AQUI_TEST_URL/anything" ''
-printf '\000\377' | ./target/debug/aqui patch "$AQUI_TEST_URL/anything" -I
-./target/debug/aqui delete "$AQUI_TEST_URL/anything"
-```
-
-These examples do not replace assertions against returned bytes/status or cover
-the complete matrix. They have not been run by the agent.
-
-## Scope decisions before publication
-
-- [ ] Developer accepts the documented feature subset for 8.0.0, particularly
-  absent request-body display/IP/status-code commands.
-- [x] Revised HTTP-status exit policy is implemented and documented: completion
-  succeeds in either output mode; `--fail` fails 4xx/5xx after output. unit- and process-tested by the loopback suite.
-- [ ] Registry crate-name/ownership/version availability checked in developer's
-  publishing context; not established by a local package build.
-
-## Final developer actions
-
-Git state, credentials, commit/tag/push and publication are developer-managed.
-Do not publish from the workspace-local tool Cargo home. After source review,
-validation and Git work, use a private credential context:
+After the local release commit, publish from `repos/aqui` using the developer's
+private credential context, not the workspace-local tool Cargo home:
 
 ```sh
 cargo publish --dry-run --locked
 cargo publish --locked
 ```
 
-The dry run can access the registry and is not the agent's local offline package
-verification. Release-binary distribution/cross-platform CI are not configured;
-8.0.0 currently prepares a Cargo source release. No publication has occurred.
+If version 8.0.0 already exists in the registry, choose a new version before
+publishing; local package verification does not establish registry availability.

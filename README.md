@@ -3,13 +3,15 @@
 Version **8.0.0** is prepared for release under the [MIT license](LICENSE).
 The major version advances the User-Agent from Node's `aqui/7.x` to `aqui/8.0.0`,
 avoiding a misleading version regression to `aqui/0.1.0`. This Rust release provides
-the HTTP-method core and does not claim complete Node feature parity.
+the HTTP-method core, payload previews, status lookup and public IP/geolocation
+lookup. It does not claim complete Node feature parity.
 See the [release checklist](docs/releasing.md) and [changelog](CHANGELOG.md).
 
 A human-friendly HTTP CLI, ported from [Node aquí](https://github.com/joeledwards/node-aqui).
 Supports GET, HEAD, OPTIONS, DELETE, PATCH, POST, and PUT, including positional
 and streamed stdin payloads for write methods, Basic authentication, and a
-per-client TLS verification opt-out. IP and status-code lookup remain planned.
+per-client TLS verification opt-out, offline status-code lookup, and HTTPS
+public IP/geolocation lookup.
 See [feature parity and next steps](docs/parity.md).
 
 Requires Rust 1.87 or newer. Build with `cargo build --locked`.
@@ -34,6 +36,66 @@ aqui get https://localhost:8443 -C
 
 Use `aqui get --help` for all options. `-h` supplies a header, following Node aquí;
 help for each method command is available through `--help`.
+
+## Status-code lookup
+
+```sh
+aqui status-codes
+aqui status-codes '42'
+aqui status-codes 'not found'
+aqui status-codes -u
+aqui status-codes -U
+```
+
+This command runs offline. A case-insensitive literal text filter matches the
+code or description and implies inclusion of unofficial entries. Regex metacharacters are literal; no matches prints the heading/source and
+succeeds.
+`-u/--include-unofficial` includes unofficial entries; `-U/--only-unofficial`
+restricts results even when combined with a filter or `-u`. Duplicate codes are
+retained for distinct unofficial usages, marked `[unofficial]` in plain and colored
+output. Codes are numerically ordered. Filters currently use literal text rather
+than Node's regular-expression syntax.
+
+The bundled historical catalog comes from node-http's Wikipedia-based list;
+413/422 use current registered names, and 306/418 are labeled unused (418 retains
+its historical teapot label for search). It is not a live or exhaustive registry.
+Source attribution prints with every listing. See `src/status.rs` for the snapshot.
+
+## Public IP and geolocation
+
+```sh
+aqui ip
+aqui ip -c
+aqui ip -gJ
+aqui ip -gr
+```
+
+IP lookup sends one HTTPS GET to `https://ipwho.is/`, including for IP-only output.
+The provider sees the caller's public IP (or configured proxy's IP) and may apply
+availability, rate, or usage restrictions. There is no fallback to plain HTTP.
+TLS verification stays enabled, redirects are not followed, and `-t/--timeout`
+sets a positive total timeout in milliseconds (default 5000). Responses are limited
+to 64 KiB. Non-success HTTP status, invalid JSON, provider failure, missing/invalid
+IP, and malformed supplied fields fail with exit 1 before output.
+
+Default output labels the IP; `-g/--geo` adds geolocation. `-c/--cli` prints the IP
+on one line, optionally followed by `CC,REGION,ZIP LAT,LON`; `-C/--cli-pretty`
+is the human-colored variant. `-j/--json` and `-J/--json-pretty` produce compact
+and indented normalized JSON. Without `-g`, normalized JSON contains only `ip`.
+With `-g`, fields match Node's names: `ip`, `as`, `isp`, `org`, `countryCode`,
+`countryName`, `regionCode`, `regionName`, `city`, `zipCode`, `metroCode`,
+`timeZone`, `latitude`, `longitude`. ASN is formatted as `AS<number>`; unavailable
+fields are JSON null (human output uses `unknown`). Metro code is unavailable.
+`-r/--raw` and `-R/--raw-pretty` serialize the provider's complete JSON object,
+including geolocation, compact or indented; they do not preserve response whitespace.
+Raw provider schema can change independently of normalized output.
+
+Choose one output flag; conflicting formats are argument errors. Compact JSON
+(`-j`, `-r`) and plain CLI (`-c`) never contain generated ANSI, even with
+`--color always`. All pretty modes (`-C`, `-J`, `-R`) and default human output
+follow `--color`: auto colors terminals, always forces color, and never disables
+it. Pretty JSON uses the same token palette as HTTP response JSON. Every mode
+ends with a newline.
 
 ## Current contract
 
@@ -62,7 +124,15 @@ help for each method command is available through `--help`.
   including an explicitly empty argument. JSON literals default to
   application/json; other literals and stdin default to application/octet-stream.
   An explicit Content-Type overrides detection. Stdin streams without buffering
-  or JSON detection. Upload data is not displayed yet.
+  or JSON detection.
+- Normal mode displays positional request payloads after the method/URL and before
+  outbound headers: byte count plus pretty JSON for complete valid JSON, otherwise
+  hex with offsets and printable ASCII. At most 4096 source bytes are shown;
+  larger bodies show a hex prefix and explicit truncation notice, without changing
+  sent bytes. Empty literals display a zero-byte payload; absent bodies do not.
+  Stdin stays unbuffered and displays only bytes read from the source, explicitly
+  not confirmed server delivery. Payloads are displayed verbatim without secret
+  redaction. Raw response mode bypasses all upload diagnostics.
 - Content-Length and Transfer-Encoding are managed by the HTTP client; supplying
   either as a custom header is rejected. Literal bodies have exact byte lengths;
   streamed framing depends on HTTP version and is not included in the prepared
@@ -112,7 +182,7 @@ help for each method command is available through `--help`.
   Both modes fail on transport, read, write, and flush errors. Broken pipes fail
   quietly. Argument errors exit 2; other failures exit 1; success exits 0.
 
-This is a first working slice, not full compatibility with Node aquí.
+Remaining differences from Node aquí are documented in the parity guide.
 See [test coverage](docs/test-coverage.md) for verification and remaining gaps.
 
 ## Development

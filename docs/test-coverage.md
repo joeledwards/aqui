@@ -30,15 +30,25 @@ or external endpoints are contacted by these tests.
 | Auth/TLS/--fail flags on all methods, secure defaults, password dependency | `args::tests::auth_tls_and_http_failure_options` |
 | Basic auth exact encoding, empty/UTF-8 credentials, invalid username/controls, Authorization conflicts | `request::tests::basic_auth_encoding_and_conflicts` |
 | Outbound credential redaction preserves request bytes and duplicate cookie count | `request::tests::outbound_secrets_are_redacted_without_changing_request` |
+| Status lookup parsing, literal metacharacters, unofficial flags; IP formats/conflicts/timeout/help | `args::tests::lookup_commands` |
+| Status catalog ordering, duplicate codes, matching, unofficial precedence, exact output, style equivalence and writer failures | `status::tests::catalog_filters_and_styling`, `exact_output_and_errors` |
+| Payload absent/empty/JSON/hex, exact output, preview limit boundaries, styling and writer failure | `output::tests::payload_previews_and_failures`, `payload_placement_in_exchange` |
+| Stdin source-read count, EOF and interrupted read preservation | `upload::tests::counts_actual_reads_and_preserves_errors` |
+| IP normalized schema, IPv4/IPv6, missing/invalid fields, coordinates, provider failure and malformed JSON | `ip::tests::validates_and_normalizes_provider_schema`, `provider_read_errors_limits_and_status` |
+| IP formats, exact CLI/JSON/human output, raw/normalized objects, plain compact machine output, colored pretty JSON regression (failed before fix), partial writes and writer/flush errors | `ip::tests::output_modes_exact_and_color`, `partial_writes_and_failures` |
+
+| IP pretty auto color for terminal versus pipe, explicit always/never, compact output always plain and parseable | `args::tests::ip_pretty_color_destination_contract` |
 
 ## Integration evidence
 
 Developer-authorized `tools/check_transport.py` passed all **80** bounded loopback
-HTTP/TLS/process cases on 2026-10-28 using the Rust 1.87 debug binary. No external
-requests. It covers all methods, literal and 64 KiB binary stdin bytes, HEAD,
-status/exit combinations, redirects/auth stripping/replay, self-signed TLS rejection
-and explicit -C acceptance, timeouts/truncation/body limits, duplicates, credential
-display, broken pipes, help/version and forced/disabled/piped-auto color.
+HTTP/TLS/process cases again on 2026-10-29 against the rebuilt Rust 1.87 binary
+including the lookup/payload additions. No external requests. It covers all
+methods, literal and 64 KiB binary stdin bytes, HEAD, status/exit combinations,
+redirects/auth stripping/replay, self-signed TLS rejection and explicit -C
+acceptance, timeouts/truncation/body limits, duplicates, credential display,
+broken pipes, help/version and forced/disabled/piped-auto color. IP-provider
+access is not exercised by this suite.
 
 The initial redirect-limit fixture accidentally reached a final successful route;
 corrected it to loop and reran successfully. No Rust client changes were required.
@@ -54,5 +64,5 @@ to the loopback suite, not external endpoints or broader campaigns.
 - A 64 KiB test upload and 1 MiB broken-pipe response do not establish RSS or
   long-stream resource bounds. Other redirected-output failures remain untested
   at process level, although isolated writer-failure tests pass.
-- Request-body display, IP/status-code lookup and color customization remain missing.
+- Live IP provider/schema/availability validation and color customization remain gaps.
 - No performance, RSS, fuzz, cross-platform, or legacy-execution validation.

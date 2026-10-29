@@ -21,7 +21,7 @@ impl ColorChoice {
 #[derive(Debug, Parser)]
 #[command(version, about = "Human-friendly HTTP tools")]
 pub struct Cli {
-    /// Response colors: auto (default, terminal only), always, or never; raw output is unaffected
+    /// Human output colors: auto (default, terminal only), always, or never; HTTP raw and compact IP output stay plain
     #[arg(long, global = true, value_enum, default_value_t = ColorChoice::Auto)]
     pub color: ColorChoice,
     #[command(subcommand)]
@@ -30,6 +30,10 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// List HTTP status codes (offline)
+    StatusCodes(StatusArgs),
+    /// Fetch public IP and optional geolocation via HTTPS ipwho.is
+    Ip(IpArgs),
     /// HTTP GET
     Get(HttpArgs),
     /// HTTP HEAD (response headers only)
@@ -56,6 +60,9 @@ impl Command {
     pub fn into_request(self) -> (reqwest::Method, HttpArgs, Input) {
         use reqwest::Method;
         match self {
+            Self::StatusCodes(_) | Self::Ip(_) => {
+                unreachable!("lookup commands are dispatched separately")
+            }
             Self::Get(args) => (Method::GET, args, Input::None),
             Self::Head(args) => (Method::HEAD, args, Input::None),
             Self::Options(args) => (Method::OPTIONS, args, Input::None),
@@ -63,6 +70,67 @@ impl Command {
             Self::Patch(args) => args.into_request(Method::PATCH),
             Self::Post(args) => args.into_request(Method::POST),
             Self::Put(args) => args.into_request(Method::PUT),
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub struct StatusArgs {
+    /// Case-insensitive literal text matching a code or description; includes unofficial codes
+    pub filter: Option<String>,
+    /// Include unofficial status codes
+    #[arg(short = 'u', long)]
+    pub include_unofficial: bool,
+    /// Restrict results to unofficial codes, also when filtering
+    #[arg(short = 'U', long)]
+    pub only_unofficial: bool,
+}
+
+#[derive(Debug, Args)]
+#[group(skip)]
+pub struct IpArgs {
+    /// Include normalized geolocation fields
+    #[arg(short = 'g', long)]
+    pub geo: bool,
+    /// Plain single-line output
+    #[arg(short = 'c', long, group = "ip_format")]
+    pub cli: bool,
+    /// Human-readable single-line output with destination-aware color
+    #[arg(short = 'C', long, group = "ip_format")]
+    pub cli_pretty: bool,
+    /// Compact normalized JSON
+    #[arg(short = 'j', long, group = "ip_format")]
+    pub json: bool,
+    /// Indented normalized JSON with destination-aware color
+    #[arg(short = 'J', long, group = "ip_format")]
+    pub json_pretty: bool,
+    /// Compact provider JSON (includes geolocation)
+    #[arg(short = 'r', long, group = "ip_format")]
+    pub raw: bool,
+    /// Indented provider JSON with destination-aware color; includes geolocation
+    #[arg(short = 'R', long, group = "ip_format")]
+    pub raw_pretty: bool,
+    /// Total lookup timeout in milliseconds
+    #[arg(short = 't', long, default_value_t = 5000, value_parser = clap::value_parser!(u64).range(1..))]
+    pub timeout: u64,
+}
+impl IpArgs {
+    pub fn format(&self) -> aqui::ip::Format {
+        use aqui::ip::Format;
+        if self.cli {
+            Format::Cli
+        } else if self.cli_pretty {
+            Format::CliPretty
+        } else if self.json {
+            Format::Json
+        } else if self.json_pretty {
+            Format::JsonPretty
+        } else if self.raw {
+            Format::Raw
+        } else if self.raw_pretty {
+            Format::RawPretty
+        } else {
+            Format::Human
         }
     }
 }
@@ -134,6 +202,107 @@ pub struct HttpArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ip_pretty_color_destination_contract() {
+        let data =
+            serde_json::json!({"success":true,"ip":"192.0.2.1","latitude":45.0,"longitude":-119.0});
+        for flag in [
+            "--cli-pretty",
+            "--json-pretty",
+            "--raw-pretty",
+            "--json",
+            "--raw",
+            "--cli",
+        ] {
+            for (color, terminal, colored) in [
+                (None, false, false),
+                (None, true, true),
+                (Some("auto"), false, false),
+                (Some("auto"), true, true),
+                (Some("always"), false, true),
+                (Some("never"), true, false),
+            ] {
+                let mut argv = vec!["aqui", "ip", "-g", flag];
+                if let Some(color) = color {
+                    argv.extend(["--color", color]);
+                }
+                let cli = Cli::try_parse_from(argv).unwrap();
+                let style = cli.color.style(terminal);
+                let Command::Ip(args) = cli.command else {
+                    panic!()
+                };
+                let mut bytes = Vec::new();
+                aqui::ip::write_info(&mut bytes, &data, args.geo, args.format(), style).unwrap();
+                let pretty = flag.ends_with("-pretty");
+                assert_eq!(
+                    bytes.windows(2).any(|b| b == b"\x1b["),
+                    colored && pretty,
+                    "{flag}, {color:?}, terminal={terminal}"
+                );
+                if (flag.contains("json") || flag.contains("raw")) && !(colored && pretty) {
+                    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+                    assert_eq!(value["ip"], "192.0.2.1");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn lookup_commands() {
+        for flags in [
+            vec!["status-codes"],
+            vec!["status-codes", "420", "-u"],
+            vec!["status-codes", "not found", "-U"],
+            vec!["status-codes", "-uU"],
+        ] {
+            let mut args = vec!["aqui"];
+            args.extend(flags);
+            assert!(matches!(
+                Cli::try_parse_from(args).unwrap().command,
+                Command::StatusCodes(_)
+            ));
+        }
+        assert!(Cli::try_parse_from(["aqui", "status-codes", "["]).is_ok());
+        for (flag, format) in [
+            ("-c", aqui::ip::Format::Cli),
+            ("-C", aqui::ip::Format::CliPretty),
+            ("-j", aqui::ip::Format::Json),
+            ("-J", aqui::ip::Format::JsonPretty),
+            ("-r", aqui::ip::Format::Raw),
+            ("-R", aqui::ip::Format::RawPretty),
+        ] {
+            let Command::Ip(args) = Cli::try_parse_from(["aqui", "ip", "-g", flag, "-t", "1"])
+                .unwrap()
+                .command
+            else {
+                panic!()
+            };
+            assert!(args.geo);
+            assert_eq!(args.format(), format);
+            assert_eq!(args.timeout, 1);
+        }
+        for args in [
+            vec!["aqui", "ip", "-jJ"],
+            vec!["aqui", "ip", "--timeout", "0"],
+            vec!["aqui", "ip", "host"],
+        ] {
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+        let Command::Ip(args) = Cli::try_parse_from(["aqui", "ip"]).unwrap().command else {
+            panic!()
+        };
+        assert_eq!(args.format(), aqui::ip::Format::Human);
+        assert_eq!(args.timeout, 5000);
+        for command in ["ip", "status-codes"] {
+            assert_eq!(
+                Cli::try_parse_from(["aqui", command, "--help"])
+                    .unwrap_err()
+                    .kind(),
+                clap::error::ErrorKind::DisplayHelp
+            );
+        }
+    }
+
     #[test]
     fn auth_tls_and_http_failure_options() {
         for method in ["get", "head", "options", "delete", "patch", "post", "put"] {

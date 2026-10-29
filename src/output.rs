@@ -87,9 +87,28 @@ pub struct RequestDetails<'a> {
 /// Render response details followed by the initial method and outbound headers.
 /// If redirected, show the final URL separately to avoid attributing initial headers to it.
 pub fn write_exchange(
+    writer: impl Write,
+    response: ResponseDetails<'_>,
+    request: Option<RequestDetails<'_>>,
+    style: Style,
+) -> io::Result<()> {
+    write_exchange_with_payload(writer, response, request, PayloadDetails::None, style)
+}
+
+/// Bounded upload presentation; stdin counts source reads, not acknowledged delivery.
+#[derive(Clone, Copy)]
+pub enum PayloadDetails<'a> {
+    None,
+    Literal { preview: &'a [u8], total: usize },
+    Stdin(u64),
+}
+
+/// Render an exchange with an optional bounded upload preview.
+pub fn write_exchange_with_payload(
     mut writer: impl Write,
     response: ResponseDetails<'_>,
     request: Option<RequestDetails<'_>>,
+    payload: PayloadDetails<'_>,
     style: Style,
 ) -> io::Result<()> {
     let ResponseDetails {
@@ -130,6 +149,7 @@ pub fn write_exchange(
     )?;
     writer.write_all(b"\n\n")?;
     if let Some(request) = request {
+        write_payload(&mut writer, payload, style)?;
         write_headers(&mut writer, request.headers, style)?;
         writer.write_all(b"\n")?;
         if request.url != url {
@@ -159,6 +179,72 @@ pub fn write_exchange(
     )?;
     writer.write_all(b")\n")?;
     writer.flush()
+}
+
+/// Maximum number of literal request bytes presented. Longer input uses a hex prefix.
+pub const PAYLOAD_PREVIEW_BYTES: usize = 4096;
+
+/// Write a bounded JSON/hex preview or stdin count without flushing.
+pub fn write_payload(
+    mut out: impl Write,
+    payload: PayloadDetails<'_>,
+    style: Style,
+) -> io::Result<()> {
+    match payload {
+        PayloadDetails::None => return Ok(()),
+        PayloadDetails::Stdin(count) => writeln!(
+            out,
+            "Request payload: {count} bytes read from stdin (delivery not confirmed)"
+        )?,
+        PayloadDetails::Literal { preview, total } => {
+            let preview = &preview[..preview.len().min(PAYLOAD_PREVIEW_BYTES).min(total)];
+            writeln!(out, "Request payload: {total} bytes")?;
+            let json = (preview.len() == total)
+                .then(|| serde_json::from_slice::<serde_json::Value>(preview).ok())
+                .flatten();
+            if let Some(json) = json {
+                style.json(&mut out, &serde_json::to_vec_pretty(&json)?)?;
+                writeln!(out)?;
+            } else {
+                for (line, bytes) in preview.chunks(16).enumerate() {
+                    write!(out, "{:08x}  ", line * 16)?;
+                    for i in 0..16 {
+                        if let Some(byte) = bytes.get(i) {
+                            style.paint(
+                                &mut out,
+                                Color::Orange,
+                                format!("{byte:02x}").as_bytes(),
+                            )?;
+                            write!(out, " ")?;
+                        } else {
+                            write!(out, "   ")?;
+                        }
+                    }
+                    write!(out, " |")?;
+                    for &byte in bytes {
+                        write!(
+                            out,
+                            "{}",
+                            if byte.is_ascii_graphic() || byte == b' ' {
+                                byte as char
+                            } else {
+                                '.'
+                            }
+                        )?;
+                    }
+                    writeln!(out, "|")?;
+                }
+            }
+            if preview.len() < total {
+                writeln!(
+                    out,
+                    "[preview truncated: {} of {total} bytes]",
+                    preview.len()
+                )?;
+            }
+        }
+    }
+    writeln!(out)
 }
 
 fn write_headers(mut writer: impl Write, headers: &HeaderMap, style: Style) -> io::Result<()> {
@@ -225,6 +311,96 @@ mod tests {
             fail_flush: false,
         }
     }
+    #[test]
+    fn payload_placement_in_exchange() {
+        let url = Url::parse("http://example.invalid/").unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-test", "yes".parse().unwrap());
+        for style in [Style::Plain, Style::Colorful] {
+            let mut out = Vec::new();
+            write_exchange_with_payload(
+                &mut out,
+                ResponseDetails {
+                    body: b"",
+                    headers: &HeaderMap::new(),
+                    url: &url,
+                    status: StatusCode::OK,
+                    elapsed: Duration::ZERO,
+                },
+                Some(RequestDetails {
+                    method: &reqwest::Method::POST,
+                    url: &url,
+                    headers: &headers,
+                }),
+                PayloadDetails::Literal {
+                    preview: b"false",
+                    total: 5,
+                },
+                style,
+            )
+            .unwrap();
+            assert_eq!(crate::colors::tests::strip_ansi(&out),b"\nPOST http://example.invalid/\n\nRequest payload: 5 bytes\nfalse\n\nx-test : yes\n\n[200] OK (0.000 ms)\n");
+        }
+    }
+
+    #[test]
+    fn payload_previews_and_failures() {
+        for (data, expected) in [
+            (b"".as_slice(), "Request payload: 0 bytes\n\n"),
+            (b"false", "Request payload: 5 bytes\nfalse\n\n"),
+            (b"{}", "Request payload: 2 bytes\n{}\n\n"),
+            (
+                b"a\x00\xff",
+                "Request payload: 3 bytes\n00000000  61 00 ff                                         |a..|\n\n",
+            ),
+        ] {
+            for style in [Style::Plain, Style::Colorful] {
+                let mut out = writer();
+                write_payload(
+                    &mut out,
+                    PayloadDetails::Literal {
+                        preview: data,
+                        total: data.len(),
+                    },
+                    style,
+                )
+                .unwrap();
+                assert_eq!(
+                    crate::colors::tests::strip_ansi(&out.bytes),
+                    expected.as_bytes()
+                );
+            }
+        }
+        for length in [4095, 4096, 4097] {
+            let data = vec![b'x'; length];
+            let mut out = Vec::new();
+            write_payload(
+                &mut out,
+                PayloadDetails::Literal {
+                    preview: &data,
+                    total: length,
+                },
+                Style::Plain,
+            )
+            .unwrap();
+            assert_eq!(
+                String::from_utf8(out)
+                    .unwrap()
+                    .contains("preview truncated"),
+                length > 4096
+            );
+        }
+        let mut out = Vec::new();
+        write_payload(&mut out, PayloadDetails::Stdin(7), Style::Plain).unwrap();
+        assert_eq!(
+            out,
+            b"Request payload: 7 bytes read from stdin (delivery not confirmed)\n\n"
+        );
+        let mut out = writer();
+        out.fail_write = true;
+        assert!(write_payload(out, PayloadDetails::Stdin(1), Style::Colorful).is_err());
+    }
+
     #[test]
     fn raw_exact_bytes_partial_writes_and_errors() {
         for data in [b"".as_slice(), b"\0\xff\n{}"] {

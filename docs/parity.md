@@ -12,11 +12,11 @@ implementation details and bugs are not compatibility requirements.
 | Basic authentication (`-u`, `-p`) | Implemented with conflict/credential validation | Loopback credential/redirect checks passed |
 | Invalid-certificate opt-in (`-C`) | Implemented per client, verified by default | Self-signed TLS rejection/opt-out checks passed |
 | Body, response headers, request headers, URL, status, duration | Implemented | Request headers are prepared initial metadata, not a final wire trace |
-| Request payload presentation | Missing | Bounded display, JSON/hex rendering, streamed upload byte count |
+| Request payload presentation | Implemented | 4 KiB JSON/hex preview; stdin source-read count, not delivery confirmation |
 | Raw response streaming (`-D`) | Implemented, same completion/`--fail` exit policy as normal | Process/HTTP-status matrix passed |
 | JSON/color presentation | Implemented | Theme/environment customization, response charset and binary display policy |
-| Public IP/geo lookup | Missing | HTTPS provider choice, schema validation, clear output modes/timeouts |
-| Status-code lookup/filter | Missing | Curated official/unofficial dataset with provenance and filter contract |
+| Public IP/geo lookup | Implemented | HTTPS ipwho.is, normalized/provider JSON and CLI modes; live provider validation remains developer-run |
+| Status-code lookup/filter | Implemented | Offline historical catalog, literal and unofficial filters; current-name adjustments documented in README |
 
 ## Accuracy choices already made
 
@@ -41,25 +41,27 @@ implementation details and bugs are not compatibility requirements.
   wait time; a blocking stdin read is not guaranteed to be interruptible by the
   network timeout.
 
-## Recommended next steps
+## Remaining work
 
-1. Local `tools/check_transport.py` passed 80 developer-authorized HTTP/TLS/process
-   cases. Keep it available for regression checks.
-2. Complete developer-run HTTP/HTTPS validation covering every method, bodies,
-   HEAD, redirects, timeouts, duplicates, and read/write failures. Unit success
-   does not establish transport correctness. Reqwest's redirect behavior applies:
-   methods/bodies can be rewritten for 301/302/303, while streaming bodies cannot
-   be replayed for redirects requiring the original body. Do not buffer stdin or
-   resend a modifying request silently to achieve legacy parity.
-3. Improve diagnostics: bounded request-body display, uploaded byte counts,
-   initial versus final request metadata, and optionally separate header/body
-   timing. Do not claim header snapshots are a wire capture.
-4. The revised exit contract is process-tested: a completed response
-   succeeds in either mode; `--fail` fails HTTP 4xx/5xx after output. In particular,
-   201 and 204 succeed in raw mode. Transport/I/O failures always fail.
-5. Add status-code lookup, then IP/geo lookup. Decide provider and output schemas
-   before implementation, and avoid carrying over Node's plain-HTTP geo endpoint.
+- Status filtering currently uses case-insensitive literal text rather than Node
+  regular expressions. The historical bundled catalog is not a live registry.
+- Color environment/theme customization is not implemented. All pretty IP modes
+  follow `--color auto|always|never`; compact IP modes remain plain.
+- Live IP-provider behavior, public TLS, proxies, real terminal appearance,
+  blocked/failed stdin and large-stream resource measurements remain manual
+  validation. Outbound metadata describes the prepared initial request, not a
+  redirect/proxy wire capture. Additional timing breakdowns are future work.
 
-Developer captures `g.c` and `g2.c` are local inputs, not test fixtures; they
-remain untouched. The authorized loopback suite ran successfully; no external
-endpoint calls were made by the agent.
+The loopback suite validates method/body/redirect/status behavior without external
+requests. See releasing.md for the latest run and publication handoff. Developer
+captures `g.c` and `g2.c` remain untouched.
+
+## Lookup/payload differences from Node
+
+- Status filters use literal case-insensitive text instead of Node regular expressions; `-U` continues to
+  restrict results with a filter. Unofficial entries use a textual marker.
+- IP uses HTTPS ipwho.is instead of Node's plain-HTTP ip-api.com. Output formats
+  conflict explicitly rather than silently taking precedence. Missing geo fields
+  are null; ASN is AS<number>. Compact JSON remains plain; all pretty modes follow `--color`.
+- Literal upload previews include empty bodies and cap source bytes at 4096.
+  Stdin reports bytes read, not bytes acknowledged. Raw response mode stays exact.
