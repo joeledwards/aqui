@@ -1,9 +1,10 @@
 # aquí
 
-Version **8.1.0** is prepared for release under the [MIT license](LICENSE).
-Building on the published 8.0.0 Rust HTTP client, this minor release adds payload
-previews, status-code lookup and public IP/geolocation lookup. It does not claim
-complete Node feature parity. The default User-Agent is `aqui/8.1.0`.
+Version **8.1.1** is prepared for release under the [MIT license](LICENSE).
+This patch release improves status-code display with non-standard markers, an
+explanatory legend and a colored source URL. The HTTP client, payload previews,
+status lookup and public IP/geolocation features from 8.1.0 remain available.
+The default User-Agent is `aqui/8.1.1`.
 See the [release checklist](docs/releasing.md) and [changelog](CHANGELOG.md).
 
 A human-friendly HTTP CLI, ported from [Node aquí](https://github.com/joeledwards/node-aqui).
@@ -51,14 +52,17 @@ code or description and implies inclusion of unofficial entries. Regex metachara
 succeeds.
 `-u/--include-unofficial` includes unofficial entries; `-U/--only-unofficial`
 restricts results even when combined with a filter or `-u`. Duplicate codes are
-retained for distinct unofficial usages, marked `[unofficial]` in plain and colored
-output. Codes are numerically ordered. Filters currently use literal text rather
+retained for distinct unofficial usages, marked `❄️` (non-standard) in plain and colored
+output, except in `-U` mode, which omits redundant markers and the legend.
+Other listings containing non-standard entries include the key
+`❄️  unofficial status codes` above the source. Codes are numerically ordered. Filters currently use literal text rather
 than Node's regular-expression syntax.
 
 The bundled historical catalog comes from node-http's Wikipedia-based list;
 413/422 use current registered names, and 306/418 are labeled unused (418 retains
 its historical teapot label for search). It is not a live or exhaustive registry.
-Source attribution prints with every listing. See `src/status.rs` for the snapshot.
+Source attribution prints with every listing; its URL uses the HTTP URL
+component palette when color is enabled. Auto mode keeps piped output plain. See `src/status.rs` for the snapshot.
 
 ## Public IP and geolocation
 

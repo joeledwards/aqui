@@ -136,6 +136,7 @@ pub fn write_codes(
 ) -> io::Result<()> {
     let filter = filter.map(str::to_lowercase);
     writeln!(out, "HTTP Status Codes")?;
+    let mut has_unofficial = false;
     for &(code, unofficial, description) in CODES {
         if (only && !unofficial) || (!only && !include && filter.is_none() && unofficial) {
             continue;
@@ -145,6 +146,7 @@ pub fn write_codes(
         }) {
             continue;
         }
+        has_unofficial |= unofficial && !only;
         out.write_all(b"  ")?;
         style.paint(
             &mut out,
@@ -154,10 +156,16 @@ pub fn write_codes(
         writeln!(
             out,
             " {description}{}",
-            if unofficial { " [unofficial]" } else { "" }
+            if unofficial && !only { " ❄️" } else { "" }
         )?;
     }
-    writeln!(out, "Source: {SOURCE}")?;
+    if has_unofficial {
+        writeln!(out, "\n❄️  unofficial status codes")?;
+    }
+    out.write_all(b"Source: ")?;
+    let source = reqwest::Url::parse(SOURCE).map_err(io::Error::other)?;
+    style.url(&mut out, &source)?;
+    writeln!(out)?;
     out.flush()
 }
 
@@ -201,6 +209,82 @@ mod tests {
         }
         assert!(CODES.windows(2).all(|pair| pair[0].0 <= pair[1].0));
     }
+    #[test]
+    fn unofficial_snowflake_marker() {
+        for style in [Style::Plain, Style::Colorful] {
+            let mut out = Vec::new();
+            write_codes(&mut out, Some("103"), false, false, style).unwrap();
+            let plain = String::from_utf8(crate::colors::tests::strip_ansi(&out)).unwrap();
+            assert_eq!(
+                plain,
+                format!(
+                    "HTTP Status Codes\n  103 Early Hints\n  103 Checkpoint ❄️\n\n❄️  unofficial status codes\nSource: {SOURCE}\n"
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn legend_explains_only_visible_unofficial_entries() {
+        for (filter, include, only, legend) in [
+            (None, false, false, false),
+            (None, true, false, true),
+            (None, false, true, false),
+            (Some("103"), true, true, false),
+            (Some("420"), false, false, true),
+            (Some("404"), true, false, false),
+            (Some("no matches"), true, true, false),
+        ] {
+            for style in [Style::Plain, Style::Colorful] {
+                let mut bytes = Vec::new();
+                write_codes(&mut bytes, filter, include, only, style).unwrap();
+                let text = String::from_utf8(crate::colors::tests::strip_ansi(&bytes)).unwrap();
+                assert_eq!(
+                    text.matches("❄️  unofficial status codes").count(),
+                    usize::from(legend)
+                );
+                if legend {
+                    assert!(text.contains("\n\n❄️  unofficial status codes\nSource: "));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn only_unofficial_omits_markers_and_legend() {
+        for include in [false, true] {
+            for style in [Style::Plain, Style::Colorful] {
+                let mut bytes = Vec::new();
+                write_codes(&mut bytes, Some("103"), include, true, style).unwrap();
+                assert_eq!(
+                    crate::colors::tests::strip_ansi(&bytes),
+                    format!("HTTP Status Codes\n  103 Checkpoint\nSource: {SOURCE}\n").as_bytes()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn source_url_uses_component_colors() {
+        let mut out = Vec::new();
+        write_codes(&mut out, Some("no matches"), false, false, Style::Colorful).unwrap();
+        let text = String::from_utf8(out.clone()).unwrap();
+        assert!(text.contains(concat!(
+            "Source: ",
+            "\x1b[38;2;102;187;51mhttps\x1b[0m://",
+            "\x1b[38;2;51;170;221men.wikipedia.org\x1b[0m/",
+            "\x1b[38;2;153;85;255mwiki\x1b[0m/",
+            "\x1b[38;2;153;85;255mList_of_HTTP_status_codes\x1b[0m\n"
+        )));
+        assert_eq!(
+            crate::colors::tests::strip_ansi(&out),
+            format!("HTTP Status Codes\nSource: {SOURCE}\n").as_bytes()
+        );
+        let mut plain = Vec::new();
+        write_codes(&mut plain, Some("no matches"), false, false, Style::Plain).unwrap();
+        assert_eq!(plain, crate::colors::tests::strip_ansi(&out));
+    }
+
     #[test]
     fn exact_output_and_errors() {
         let filter = "404";

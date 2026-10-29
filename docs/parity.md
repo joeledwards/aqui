@@ -59,7 +59,9 @@ captures `g.c` and `g2.c` remain untouched.
 ## Lookup/payload differences from Node
 
 - Status filters use literal case-insensitive text instead of Node regular expressions; `-U` continues to
-  restrict results with a filter. Unofficial entries use a textual marker.
+  restrict results with a filter. Unofficial entries use the Node-style `❄️` marker except in `-U` mode,
+  where markers and their legend are omitted. The source URL uses
+  the shared URL component palette when color is enabled.
 - IP uses HTTPS ipwho.is instead of Node's plain-HTTP ip-api.com. Output formats
   conflict explicitly rather than silently taking precedence. Missing geo fields
   are null; ASN is AS<number>. Compact JSON remains plain; all pretty modes follow `--color`.

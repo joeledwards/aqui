@@ -149,7 +149,7 @@ def main():
         return result
 
     for options, expected_text in [
-        (["--version"], b"aqui 8.1.0"),
+        (["--version"], b"aqui 8.1.1"),
         (["--help"], b"Commands:"),
         (["post", "--help"], b"--payload-from-stdin"),
     ]:

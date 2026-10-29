@@ -1,14 +1,15 @@
-# 8.1.0 publication handoff
+# 8.1.1 publication handoff
 
-Version 8.1.0 is prepared locally for developer publication. Version 8.0.0 is
-already published; this minor release adds bounded request-payload previews,
-offline status-code lookup and HTTPS IP/geolocation to that HTTP-method core.
-The package version supplies the CLI version and default `aqui/8.1.0` User-Agent.
+Version 8.1.1 is prepared locally for developer publication. This patch release
+restores snowflake markers for non-standard status codes, adds their legend,
+omits redundant markers/legend in `-U` output and colorizes the source URL.
+The package version supplies the CLI version and default `aqui/8.1.1` User-Agent.
 
 ## Latest validation (2026-10-29)
 
-- 35 isolated unit tests passed on Rust 1.87, including all pretty IP formats in
-  auto/always/never color modes with terminal and piped destinations.
+- 39 isolated unit tests passed on Rust 1.87, including all pretty IP formats in
+  auto/always/never color modes with terminal and piped destinations. Status
+  regressions cover markers, legend spacing/visibility, `-U` and source URL colors.
 - Stable Clippy with warnings denied, formatting and diff whitespace passed.
 - Rust 1.87 binary build and documentation generation with warnings denied passed.
 - The previously authorized loopback suite passed all 80 HTTP/TLS/process cases
@@ -75,5 +76,5 @@ cargo publish --dry-run --locked
 cargo publish --locked
 ```
 
-The target version is 8.1.0; local package verification does not establish
+The target version is 8.1.1; local package verification does not establish
 registry availability for that version.

@@ -1,6 +1,13 @@
 # Changelog
 
-## 8.1.0 — prepared, unreleased
+## 8.1.1 — prepared, unreleased
+
+- Restore the `❄️` marker for non-standard HTTP status codes and colorize the
+  status catalog source URL using the existing URL component palette.
+- Explain the snowflake with a legend when marked unofficial entries are listed.
+- Omit redundant snowflakes and the legend in `-U/--only-unofficial` output.
+
+## 8.1.0
 
 - Offline `status-codes [filter]` with case-insensitive text, unofficial filters,
   duplicate usages, source attribution and destination-aware color.
