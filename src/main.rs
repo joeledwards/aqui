@@ -1,83 +1,81 @@
 mod args;
-mod request;
 
-use clap::{ArgMatches};
-use std::os::unix::process;
+use aqui::{output, request};
+use args::{Cli, Input};
+use clap::Parser;
+use std::{
+    io::{self, IsTerminal},
+    process::ExitCode,
+    time::{Duration, Instant},
+};
 
-use colored::*;
-use tokio;
-
-use args as arguments;
-use request;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let args = arguments::parseArgs();
-
-    print_colors();
-
-    println!("TODO:");
-    println!("- select argument parser (sub-command support)");
-    println!("- select {} client crate", "HTTP".color("red"));
-    println!("- select JSON parser crate");
-    println!("- select CLI color crate");
-    println!("- handle partial URLs (url crate?)");
-    println!("- implement `aqui get`");
-
-    match args.subcommand_name() {
-        None => {
-            println!("No subcommand selected!");
-
-            Ok(())
+fn run(cli: Cli) -> request::Result<bool> {
+    let (method, args, input) = cli.command.into_request();
+    let payload = match input {
+        Input::None => request::Payload::None,
+        Input::Literal(value) => request::Payload::Bytes(value.into_bytes()),
+        Input::Stdin => request::Payload::Stream(Box::new(io::stdin())),
+    };
+    let basic_auth = args.username.as_deref().map(|username| request::BasicAuth {
+        username,
+        password: args.password.as_deref().unwrap_or(""),
+    });
+    let (client, request) = request::build_request_with_options(
+        method.clone(),
+        &args.url,
+        &args.headers,
+        payload,
+        request::RequestOptions {
+            timeout: Duration::from_millis(args.timeout),
+            max_redirects: args.max_redirects,
+            basic_auth,
+            allow_invalid_certs: args.allow_invalid_certs,
         },
-        Some(subcommand) => {
-            println!("selected sub-command: {}", sub);
-
-            // TODO: have the handler return the result
-            handle_subcommand(subcommand, args);
-
-            Ok(())
-        },
+    )?;
+    let request_url = request.url().clone();
+    let outbound_headers = request::outbound_headers(&request)?;
+    let started = Instant::now();
+    let mut response = client.execute(request)?;
+    let status = response.status();
+    let stdout = io::stdout();
+    let style = cli.color.style(stdout.is_terminal());
+    let mut stdout = stdout.lock();
+    if args.only_output_data {
+        output::write_raw(&mut response, &mut stdout)?;
+    } else {
+        let body = output::read_body(&mut response, args.max_body_bytes)?;
+        output::write_exchange(
+            &mut stdout,
+            output::ResponseDetails {
+                body: &body,
+                headers: response.headers(),
+                url: response.url(),
+                status,
+                elapsed: started.elapsed(),
+            },
+            Some(output::RequestDetails {
+                method: &method,
+                url: &request_url,
+                headers: &outbound_headers,
+            }),
+            style,
+        )?;
     }
+    Ok(output::status_success(status, args.fail))
 }
 
-fn handle_subcommand(subcommand: &str, args: ArgMatches) {
-    let url = args.get("url");
-    let result = request::send(subcommand, url);
-}
-
-fn print_colors() {
-    let colors = vec![
-        "black",
-        "red",
-        "orange",
-        "yellow",
-        "green",
-        "cyan",
-        "blue",
-        "purple",
-        "magenta",
-        "white",
-    ];
-
-    println!();
-    println!("Colors supported by the {} crate:", "colored".yellow());
-    for color in colors {
-        println!("  {} -> {}", color, color.color(color))
+fn main() -> ExitCode {
+    match run(Cli::parse()) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::FAILURE,
+        Err(error) => {
+            if error
+                .downcast_ref::<io::Error>()
+                .is_none_or(|e| e.kind() != io::ErrorKind::BrokenPipe)
+            {
+                eprintln!("aqui: {error}");
+            }
+            ExitCode::FAILURE
+        }
     }
-
-    println!();
-    println!("And with backgrounds:");
-    println!("  {}", "red on green".red().on_green());
-    println!("  {}", "green on red".green().on_red());
-    println!("  {}", "yellow on blue".yellow().on_blue());
-    println!("  {}", "blue on yellow".blue().on_yellow());
-    println!("  {}", "cyan on magenta".cyan().on_magenta());
-    println!("  {}", "magenta on cyan".magenta().on_cyan());
-
-    println!();
-    println!("And true color support:");
-    println!(" {}", "orange".truecolor(255, 127, 0));
-
-    println!();
 }

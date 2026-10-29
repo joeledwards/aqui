@@ -1,17 +1,18 @@
 [package]
 name = "aqui"
-version = "0.1.0"
+version = "8.0.0"
 authors = ["Joel Edwards <joeledwards@gmail.com>"]
-edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+edition = "2024"
+rust-version = "1.87"
+description = "Human-friendly CLI HTTP client"
+license = "MIT"
+repository = "https://github.com/joeledwards/aqui"
+readme = "README.md"
+keywords = ["http", "cli", "client", "https", "rest"]
+categories = ["command-line-utilities", "web-programming::http-client"]
+include = ["src/**", "docs/**", "tools/check_transport.py", "Cargo.toml", "Cargo.lock", "README.md", "CHANGELOG.md", "LICENSE", "rust-toolchain.toml"]
 
 [dependencies]
-clap = "^2.33" # Argument parser
-colored = "^2" # Terminal colors
-serde_json = "^1" # JSON parser
-stopwatch = "^0.0.7" # Timer
-surf = "^1" # HTTP framework
-hyper = { version = "^0.14", features = ["full"] } # HTTP framework
-tokio = { version = "^1", features = [ "full" ] } # Async I/O runtime
-
+clap = { version = "4.6", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order"] }
